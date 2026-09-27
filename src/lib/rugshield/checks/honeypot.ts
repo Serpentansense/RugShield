@@ -242,6 +242,7 @@ export function checkHoneypot(mint: MintSnapshot, trip: RoundTrip): CheckOutput 
     check: {
       id: 'honeypot',
       label: 'Honeypot mechanisms',
+      scored: true,
       status,
       result,
       value,

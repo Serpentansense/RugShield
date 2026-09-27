@@ -8,6 +8,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { RugShieldError, checkToken } from '@/lib/rugshield';
+import { API_CONFIG, scanCache, scanRateLimiter } from '@/lib/api/config';
+import { clientKey } from '@/lib/api/rate-limit';
 import { appendScan, toScanRecord } from '@/lib/store/scans';
 import { PAYMENT_RESPONSE_HEADER, runPaymentGate } from '@/lib/x402';
 
@@ -28,15 +30,42 @@ const STATUS_BY_CODE: Record<RugShieldError['code'], number> = {
 };
 
 export async function POST(request: NextRequest) {
+  const getHeader = (name: string) => request.headers.get(name);
+
+  // --- Rate limit ----------------------------------------------------------
+  // First, because it is the cheapest check and it protects every stage after
+  // it, including the upstream calls a scan would make.
+  let rateHeaders: Record<string, string> = {};
+  if (API_CONFIG.rateLimitEnabled) {
+    const verdict = scanRateLimiter.check(clientKey(getHeader));
+    rateHeaders = {
+      'x-ratelimit-limit': String(verdict.limit),
+      'x-ratelimit-remaining': String(verdict.remaining),
+      'x-ratelimit-reset': String(Math.ceil(verdict.resetAt / 1000)),
+    };
+
+    if (!verdict.allowed) {
+      return NextResponse.json(
+        {
+          error: 'RATE_LIMITED',
+          message: `Too many scans. Try again in ${verdict.retryAfterSec}s.`,
+          limit: verdict.limit,
+          windowMs: API_CONFIG.rateWindowMs,
+        },
+        {
+          status: 429,
+          headers: { ...rateHeaders, 'retry-after': String(verdict.retryAfterSec) },
+        },
+      );
+    }
+  }
+
   // --- x402 pay-per-call gate (no-op unless X402_ENABLED=true) -------------
-  const gate = await runPaymentGate(
-    (name) => request.headers.get(name),
-    {
-      url: new URL('/api/check', request.nextUrl.origin).toString(),
-      description: 'Solana token security scan: risk score, risk level and evidence.',
-      mimeType: 'application/json',
-    },
-  );
+  const gate = await runPaymentGate(getHeader, {
+    url: new URL('/api/check', request.nextUrl.origin).toString(),
+    description: 'Solana token security scan: risk score, risk level and evidence.',
+    mimeType: 'application/json',
+  });
 
   if (gate.kind === 'misconfigured') {
     return NextResponse.json(
@@ -46,19 +75,23 @@ export async function POST(request: NextRequest) {
           'This deployment has x402 payments enabled but is not fully configured, so requests cannot be served.',
         problems: gate.problems,
       },
-      { status: 500 },
+      { status: 500, headers: rateHeaders },
     );
   }
 
   if (gate.kind === 'payment_required') {
     return NextResponse.json(gate.body, {
       status: 402,
-      headers: { 'cache-control': 'no-store' },
+      headers: { ...rateHeaders, 'cache-control': 'no-store' },
     });
   }
 
-  const paymentHeaders: Record<string, string> =
-    gate.kind === 'paid' ? { [PAYMENT_RESPONSE_HEADER]: gate.receiptHeader } : {};
+  const baseHeaders: Record<string, string> = {
+    ...rateHeaders,
+    ...(gate.kind === 'paid'
+      ? { [PAYMENT_RESPONSE_HEADER]: gate.receiptHeader }
+      : {}),
+  };
 
   // --- Parse ---------------------------------------------------------------
   let raw: unknown;
@@ -70,7 +103,7 @@ export async function POST(request: NextRequest) {
         error: 'INVALID_JSON',
         message: 'Request body must be JSON shaped like { "token": "<mint address>" }.',
       },
-      { status: 400, headers: paymentHeaders },
+      { status: 400, headers: baseHeaders },
     );
   }
 
@@ -85,20 +118,40 @@ export async function POST(request: NextRequest) {
           message: i.message,
         })),
       },
-      { status: 400, headers: paymentHeaders },
+      { status: 400, headers: baseHeaders },
     );
+  }
+
+  const token = parsed.data.token;
+
+  // --- Cache ---------------------------------------------------------------
+  // A hit is not re-persisted to the track record: the same scan appearing
+  // repeatedly would inflate the history without adding information.
+  const cached = scanCache.get(token);
+  if (cached.hit) {
+    return NextResponse.json(cached.value, {
+      status: 200,
+      headers: {
+        ...baseHeaders,
+        'x-cache': 'HIT',
+        'x-cache-age-ms': String(cached.ageMs),
+        'cache-control': 'no-store',
+      },
+    });
   }
 
   // --- Analyse -------------------------------------------------------------
   try {
-    const report = await checkToken(parsed.data.token);
+    const report = await checkToken(token);
+
+    scanCache.set(token, report);
 
     // Track record persistence must never break the response.
     await appendScan(toScanRecord(report, 'api'));
 
     return NextResponse.json(report, {
       status: 200,
-      headers: { ...paymentHeaders, 'cache-control': 'no-store' },
+      headers: { ...baseHeaders, 'x-cache': 'MISS', 'cache-control': 'no-store' },
     });
   } catch (err) {
     if (err instanceof RugShieldError) {
@@ -107,9 +160,9 @@ export async function POST(request: NextRequest) {
           error: err.code,
           message: err.message,
           ...(err.detail ? { detail: err.detail } : {}),
-          token: parsed.data.token,
+          token,
         },
-        { status: STATUS_BY_CODE[err.code], headers: paymentHeaders },
+        { status: STATUS_BY_CODE[err.code], headers: baseHeaders },
       );
     }
 
@@ -119,7 +172,7 @@ export async function POST(request: NextRequest) {
         error: 'INTERNAL_ERROR',
         message: 'The scan could not be completed. Please try again.',
       },
-      { status: 500, headers: paymentHeaders },
+      { status: 500, headers: baseHeaders },
     );
   }
 }
@@ -144,6 +197,10 @@ export async function GET() {
     notes: [
       'A check with status "unavailable" was not run and must not be read as a pass.',
       'Scores are observable signals, not a safety guarantee.',
+      `Results are cached for ${Math.round(API_CONFIG.cacheTtlMs / 1000)}s per mint; see the X-Cache header.`,
+      API_CONFIG.rateLimitEnabled
+        ? `Rate limited to ${API_CONFIG.rateLimit} requests per ${Math.round(API_CONFIG.rateWindowMs / 1000)}s per client.`
+        : 'Rate limiting is disabled on this deployment.',
     ],
   });
 }

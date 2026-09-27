@@ -29,6 +29,7 @@ export function checkLiquidity(market: MarketFetch): CheckOutput {
     return {
       check: {
         id: 'liquidity',
+        scored: true,
         label: 'Liquidity',
         status: 'unavailable',
         result: 'Could not be checked',
@@ -113,6 +114,7 @@ export function checkLiquidity(market: MarketFetch): CheckOutput {
     return {
       check: {
         id: 'liquidity',
+        scored: true,
         label: 'Liquidity',
         status: 'fail',
         result: 'No liquidity pool found',
@@ -247,6 +249,7 @@ export function checkLiquidity(market: MarketFetch): CheckOutput {
   return {
     check: {
       id: 'liquidity',
+      scored: true,
       label: 'Liquidity',
       status,
       result:

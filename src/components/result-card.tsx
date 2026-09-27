@@ -60,10 +60,11 @@ export function ResultCard({ report }: { report: RugShieldReport }) {
             <dt className="text-muted">Coverage</dt>
             <dd>
               {report.scoring.confidence === 'complete' ? (
-                'all checks ran'
+                'all scoring checks ran'
               ) : (
                 <span className="text-risk-medium">
-                  {report.scoring.unavailableChecks.length} check(s) unavailable
+                  {report.scoring.unavailableScoredChecks.length} scoring check(s)
+                  unavailable
                 </span>
               )}
             </dd>
@@ -94,8 +95,9 @@ export function ResultCard({ report }: { report: RugShieldReport }) {
 
         {report.scoring.confidence === 'partial' && (
           <p className="mt-4 rounded-lg border border-risk-medium/30 bg-risk-medium/5 p-3 text-xs leading-relaxed text-risk-medium">
-            Partial coverage: {report.scoring.unavailableChecks.join(', ')} could not be
-            run, so those areas contributed no points. An unavailable check is not a pass.
+            Partial coverage: {report.scoring.unavailableScoredChecks.join(', ')} could not
+            be run, so those areas contributed no points. An unavailable check is not a
+            pass.
           </p>
         )}
       </div>

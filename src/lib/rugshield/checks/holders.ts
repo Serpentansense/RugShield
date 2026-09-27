@@ -25,6 +25,7 @@ export function checkHolderConcentration(
     const check: CheckResult = {
       id: 'holder_concentration',
       label: 'Top holder distribution',
+      scored: false,
       status: 'unavailable',
       result: 'Could not be checked',
       value: null,
@@ -52,6 +53,7 @@ export function checkHolderConcentration(
     check: {
       id: 'holder_concentration',
       label: 'Top holder distribution',
+      scored: false,
       status: 'info',
       result:
         topShare !== null

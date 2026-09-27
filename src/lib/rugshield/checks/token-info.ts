@@ -40,6 +40,7 @@ export function checkTokenInfo(
   if (!mint.isInitialized) {
     const check: CheckResult = {
       id: 'token_info',
+      scored: true,
       label: 'Token mint account',
       status: 'fail',
       result: 'Mint account is not initialised',
@@ -66,6 +67,7 @@ export function checkTokenInfo(
   return {
     check: {
       id: 'token_info',
+      scored: true,
       label: 'Token mint account',
       status: 'info',
       result: `${programLabel}, ${mint.decimals} decimals, supply ${formatCompact(mint.supply)}`,

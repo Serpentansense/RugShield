@@ -37,6 +37,7 @@ export function checkMintAuthority(mint: MintSnapshot): CheckOutput {
         id: 'mint_authority',
         label: 'Mint authority',
         status: 'pass',
+        scored: true,
         result: 'Revoked — supply is fixed',
         value: { active: false, authority: null },
         explanation:
@@ -52,6 +53,7 @@ export function checkMintAuthority(mint: MintSnapshot): CheckOutput {
       id: 'mint_authority',
       label: 'Mint authority',
       status: 'warn',
+      scored: true,
       result: 'Active — supply can be increased',
       value: { active: true, authority: mint.mintAuthority },
       explanation:
@@ -88,6 +90,7 @@ export function checkFreezeAuthority(mint: MintSnapshot): CheckOutput {
         id: 'freeze_authority',
         label: 'Freeze authority',
         status: 'pass',
+        scored: true,
         result: 'Revoked — accounts cannot be frozen',
         value: { active: false, authority: null },
         explanation:
@@ -103,6 +106,7 @@ export function checkFreezeAuthority(mint: MintSnapshot): CheckOutput {
       id: 'freeze_authority',
       label: 'Freeze authority',
       status: 'fail',
+      scored: true,
       result: 'Active — your account can be frozen',
       value: { active: true, authority: mint.freezeAuthority },
       explanation:

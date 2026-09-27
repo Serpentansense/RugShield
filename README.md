@@ -86,8 +86,10 @@ Error codes: `INVALID_ADDRESS` (400), `MINT_NOT_FOUND` (404),
 Two rules the engine sticks to:
 
 - A check that could not run returns `status: "unavailable"` and contributes
-  zero points. `scoring.confidence` drops to `partial` and the response lists
-  which checks were skipped. **An unavailable check is not a pass.**
+  zero points. **An unavailable check is not a pass.** Every check also carries
+  `scored`, and only an unavailable *scoring* check drops
+  `scoring.confidence` to `partial` — an informational check going missing does
+  not pretend the scan was degraded.
 - The sellability probe uses *quotes*, not executed swaps. It proves an
   aggregator can build a route right now. It does not prove a transaction
   would land, and the check text says so.
@@ -142,6 +144,42 @@ been exercised against a funded wallet. Swapping in `@x402/next` +
 `@x402/svm` is the supported path if you want the official middleware instead
 of this thin gate.
 
+## Caching and rate limiting
+
+Each scan costs one RPC read plus three upstream API calls, so `/api/check` is
+protected on two fronts:
+
+- Results are cached per mint for 30s by default (`X-Cache: HIT|MISS`,
+  `X-Cache-Age-Ms`). Deliberately short — depth and routing move fast. A cache
+  hit is not re-persisted to the track record.
+- 30 requests per minute per client by default, keyed on `x-forwarded-for`.
+  Blocked callers get `429` with `Retry-After` and `X-RateLimit-*` headers.
+
+Both are in-process only, so N instances allow N times the limit and keep
+separate caches — put Redis or KV in front if you scale horizontally. The
+client key comes from a header a caller can forge unless a trusted proxy
+overwrites it, so treat the limiter as protection against accidental hammering
+rather than a determined attacker.
+
+## Tests
+
+```bash
+npm test
+```
+
+110 tests over the scoring engine, all seven checks, the x402 gate (driven by a
+fake facilitator), the cache and the rate limiter.
+
+The checks are pure functions specifically so the whole scoring surface can be
+exercised without network access — including branches that are impractical to
+reach against live mainnet data, such as a paused mint, a one-directional sell
+route, or a 50% transfer fee. Two regression guards worth naming: the
+liquidity-to-market-cap signal must stay quiet on deep markets, and an
+unavailable informational check must not mark a scan `partial`.
+
+Not covered: a successful x402 settlement against a live facilitator, and the
+`getTokenLargestAccounts` success path against a real RPC.
+
 ## Track record
 
 `/track-record` lists every scan this instance has run, newest first, with the
@@ -178,9 +216,16 @@ the CLI, and any future MCP server share one implementation.
 Being explicit rather than implying more than exists:
 
 - **MCP server.** Not built. The "Built for AI agents" card marks it as such.
-- **Tests.** Vitest is installed and the checks are written as pure functions
-  for this purpose, but no tests exist yet.
-- **x402 against a live facilitator.** Structure only, see above.
+- **x402 against a live facilitator.** Every server-side path is implemented
+  and tested against a fake facilitator, but no real payment has been settled.
+- **LP burn / liquidity lock detection.** The most important Solana rug signal
+  is missing: RugShield reports pool depth but not whether that depth can be
+  withdrawn. Planned.
+- **Scoring weights are not validated against outcomes.** They are considered
+  judgements, not measured ones. The track record exists to close that loop;
+  nothing closes it yet.
+- **Storage needs a writable filesystem**, so the track record stays empty on
+  read-only serverless hosts.
 - `npm audit` reports high-severity advisories via `bigint-buffer`, a
   transitive dependency of `@solana/web3.js` v1 with no fix in that line. Not
   reachable in a meaningful way here (fixed 8-byte slices from on-chain data),

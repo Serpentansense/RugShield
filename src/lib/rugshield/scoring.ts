@@ -58,9 +58,15 @@ export function scoreToken({ reasons, checks }: ScoreInput): ScoreOutput {
     return bySeverity !== 0 ? bySeverity : b.points - a.points;
   });
 
-  const unavailableChecks = (Object.entries(checks) as [string, CheckResult][])
-    .filter(([, c]) => c.status === 'unavailable')
-    .map(([, c]) => c.id);
+  const unavailable = (Object.values(checks) as CheckResult[]).filter(
+    (c) => c.status === 'unavailable',
+  );
+  const unavailableChecks = unavailable.map((c) => c.id);
+  // Only checks that can add points affect how much ground the score covers.
+  // `holder_concentration`, for example, is reported but never scored, and it
+  // is permanently unavailable on public RPCs — counting it would mark every
+  // single scan as `partial` and drain the signal of meaning.
+  const unavailableScoredChecks = unavailable.filter((c) => c.scored).map((c) => c.id);
 
   return {
     riskScore,
@@ -77,7 +83,8 @@ export function scoreToken({ reasons, checks }: ScoreInput): ScoreOutput {
       })),
       rawPoints,
       unavailableChecks,
-      confidence: unavailableChecks.length === 0 ? 'complete' : 'partial',
+      unavailableScoredChecks,
+      confidence: unavailableScoredChecks.length === 0 ? 'complete' : 'partial',
     },
   };
 }

@@ -26,6 +26,7 @@ export function checkSellability(trip: RoundTrip): CheckOutput {
     return {
       check: {
         id: 'sellability',
+        scored: true,
         label: 'Sellability',
         status: 'unavailable',
         result: 'Not applicable to wrapped SOL',
@@ -52,6 +53,7 @@ export function checkSellability(trip: RoundTrip): CheckOutput {
       return {
         check: {
           id: 'sellability',
+          scored: true,
           label: 'Sellability',
           status: 'unavailable',
           result: 'Could not be checked',
@@ -67,6 +69,7 @@ export function checkSellability(trip: RoundTrip): CheckOutput {
     return {
       check: {
         id: 'sellability',
+        scored: true,
         label: 'Sellability',
         status: 'fail',
         result: 'No tradable route in either direction',
@@ -97,6 +100,7 @@ export function checkSellability(trip: RoundTrip): CheckOutput {
       return {
         check: {
           id: 'sellability',
+          scored: true,
           label: 'Sellability',
           status: 'unavailable',
           result: 'Sell leg could not be checked',
@@ -115,6 +119,7 @@ export function checkSellability(trip: RoundTrip): CheckOutput {
     return {
       check: {
         id: 'sellability',
+        scored: true,
         label: 'Sellability',
         status: 'fail',
         result: 'Buy route exists, sell route does not',
@@ -184,6 +189,7 @@ export function checkSellability(trip: RoundTrip): CheckOutput {
     return {
       check: {
         id: 'sellability',
+        scored: true,
         label: 'Sellability',
         status: 'warn',
         result: 'Routes exist, round-trip value could not be computed',
@@ -231,6 +237,7 @@ export function checkSellability(trip: RoundTrip): CheckOutput {
   return {
     check: {
       id: 'sellability',
+      scored: true,
       label: 'Sellability',
       status,
       result: `Sell route found — round trip returns ${retained.toFixed(1)}% of ${probeSol} SOL`,

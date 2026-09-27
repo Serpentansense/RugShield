@@ -55,7 +55,10 @@ let writeChain: Promise<unknown> = Promise.resolve();
 
 async function readAll(): Promise<ScanRecord[]> {
   try {
-    const raw = await readFile(storePath(), 'utf8');
+    // turbopackIgnore keeps the bundler from statically tracing this path.
+    // The location is configurable at runtime, so Turbopack cannot narrow it
+    // and would otherwise pull the entire project into the server bundle.
+    const raw = await readFile(/* turbopackIgnore: true */ storePath(), 'utf8');
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? (parsed as ScanRecord[]) : [];
   } catch {
@@ -104,10 +107,10 @@ export function toScanRecord(
 export async function appendScan(record: ScanRecord): Promise<boolean> {
   const task = writeChain.then(async () => {
     const file = storePath();
-    await mkdir(path.dirname(file), { recursive: true });
+    await mkdir(/* turbopackIgnore: true */ path.dirname(file), { recursive: true });
     const existing = await readAll();
     const next = [record, ...existing].slice(0, MAX_RECORDS);
-    await writeFile(file, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
+    await writeFile(/* turbopackIgnore: true */ file, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
   });
 
   // Keep the chain alive even when this write rejects.

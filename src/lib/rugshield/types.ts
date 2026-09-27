@@ -37,6 +37,13 @@ export interface CheckResult {
   /** Human label for the UI. */
   label: string;
   status: CheckStatus;
+  /**
+   * Whether this check can contribute points to `riskScore`.
+   *
+   * Matters for coverage reporting: an unavailable check that never scores
+   * anyway does not reduce how much of the risk surface was actually covered.
+   */
+  scored: boolean;
   /** Short, plain-language summary of what was found. */
   result: string;
   /** Structured value behind `result`, shape depends on the check. */
@@ -87,11 +94,18 @@ export interface Scoring {
   breakdown: ScoringBreakdownEntry[];
   /** Sum of points before clamping. */
   rawPoints: number;
-  /** Checks that could not be run, so they contributed no points. */
+  /** Every check that could not be run, whether it scores or not. */
   unavailableChecks: string[];
   /**
-   * `complete` when every check ran, `partial` when one or more checks were
-   * unavailable and the score therefore covers less ground than usual.
+   * The subset of `unavailableChecks` that can contribute points. Only these
+   * reduce coverage, which is what `confidence` reports.
+   */
+  unavailableScoredChecks: string[];
+  /**
+   * `complete` when every scoring check ran, `partial` when at least one
+   * scoring check was unavailable and the score therefore covers less ground.
+   *
+   * Informational checks being unavailable does not make a scan partial.
    */
   confidence: 'complete' | 'partial';
 }
